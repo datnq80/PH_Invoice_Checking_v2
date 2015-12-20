@@ -1,5 +1,6 @@
-ExtractSOIHistory <- function(server, username, password, dateBegin, dateEnd,
-                              batchSize = 10000) {
+ExtractSOIHistory <- function(soiHistoryData,
+                              server, username, password, dateBegin, dateEnd,
+                              batchSize = 100000) {
   suppressMessages({
     require(dplyr)
     require(tools)
@@ -9,8 +10,8 @@ ExtractSOIHistory <- function(server, username, password, dateBegin, dateEnd,
     require(logging)
   })
   
-  functionName <- "ExExtractsoiHis"
-  loginfo(paste("Function", functionName, "started"), logger = reportName)
+  functionName <- "ExtractsoiHis"
+  flog.info(paste("Function", functionName, "started"), name = reportName)
   
   output <- tryCatch({
     
@@ -32,47 +33,48 @@ ExtractSOIHistory <- function(server, username, password, dateBegin, dateEnd,
       paste0("SELECT
       	        soihis.*
               FROM oms_live.ims_sales_order_item_status_history soihis
-              WHERE soihis.created_at BETWEEN '", dateBegin,"' AND '", dateEnd,"'")
+              WHERE soihis.created_at BETWEEN '", dateBegin,"' AND '", dateEnd,"'
+             ORDER BY soihis.created_at")
     
     
-    print(rowCount)
+    flog.info(paste("Function", functionName, "Data rows: ", rowCount), name = reportName)
     rs <- dbSendQuery(conn, dataQuery)
     pb <- txtProgressBar(min=0, max=rowCount, style = 3)
     iProgress <- 0
     setTxtProgressBar(pb, iProgress)
     
-    
-    soiHis <- dbFetch(rs, n = batchSize)
-    iProgress <- nrow(soiHis)
-    setTxtProgressBar(pb, iProgress)
-    
-    for (i in 1:round(((rowCount / batchSize) + 10), digits = 0)) {
+    rowFetched <- 0    
+    while (rowFetched < rowCount & !dbHasCompleted(rs)) {
       temp <- dbFetch(rs, n = batchSize)
-      soiHis <- rbind(soiHis,temp)
+      rowFetched <- rowFetched + batchSize
+      if (is.null(soiHistoryData)) {
+        soiHistoryData <- temp
+      } else {
+        soiHistoryData <- rbind(soiHistoryData,temp)
+      }
       
-      dbHasCompleted(rs)
       
-      iProgress <- nrow(soiHis)
+      save(soiHistoryData, file = "1_Input/RData/soiHistoryData.RData",
+           compress = TRUE)
+      
+      iProgress <- rowFetched
       setTxtProgressBar(pb, iProgress)
     }
     
     
     cat("\r\n")
-    print(nrow(soiHis))
     dbClearResult(rs)
     rm(temp)
     
-    for (iWarn in warnings()){
-      logwarn(paste(functionName, iWarn), logger = reportName)
-    }
-    assign("last.warning", NULL, envir = baseenv())
-    soiHis
+    soiHistoryData
     
   }, error = function(err) {
-    logerror(paste(functionName, err, sep = " - "), logger = consoleLog)
+    flog.error(paste(functionName, err, sep = " - "), name = reportName)
+    
+    NULL
   }, finally = {
     dbDisconnect(conn)
-    loginfo(paste(functionName, "ended"), logger = reportName)
+    flog.info(paste(functionName, "ended"), name = reportName)
   })
   
   output

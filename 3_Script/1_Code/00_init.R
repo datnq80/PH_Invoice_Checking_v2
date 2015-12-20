@@ -1,4 +1,4 @@
-dateReport <- format(Sys.time(), "%Y%m%d%H%M")
+dateReport <- format(Sys.time(), "%Y%m%d%H")
 
 suppressMessages({
   library(dplyr)
@@ -6,12 +6,15 @@ suppressMessages({
   library(magrittr)
   library(lubridate)
   library(logging)
+  library(futile.logger)
 })
 
 reportName <- paste0("IDInvoiceCheck")
-consoleLog <- paste0("IDInvoiceCheck", ".Console")
+warningLog <- paste0("IDInvoiceCheck", "warning")
+flog.appender(appender.tee(file.path("3_Script/2_Log",
+                                      paste0("ID_InvoiceChecking",dateReport,".csv"))),
+              name = reportName)
 
-addHandler(writeToFile, logger=reportName,
-           file=file.path("3_Script/2_Log",
-                          paste0("ID_InvoiceChecking",dateReport,".csv")))
-addHandler(writeToConsole , logger=consoleLog)
+layout <- layout.format('[~l]|[~t]|[~f]|~m')
+flog.layout(layout, name=reportName)
+

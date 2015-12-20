@@ -7,37 +7,21 @@ source("3_Script/1_Code/01_Loading/UpdateSOITimeStamp.R")
 source("3_Script/1_Code/01_Loading/UpdateSOIBaseData.R")
 source("3_Script/1_Code/01_Loading/BuildPackageData.R")
 
-if (file.exists("1_Input/RData/soiData.RData")) {
-  load("1_Input/RData/soiData.RData")
-} else {
-  soiData <- NULL
-}
-if (file.exists("1_Input/RData/packageData.RData")) {
-  load("1_Input/RData/packageData.RData")
-} else {
-  packageData <- NULL
-}
-if (file.exists("1_Input/RData/soiData.RData")) {
-  load("1_Input/RData/soiHistoryData.RData")
-} else {
-  soiHistoryData <- NULL
-}
-
-soiData <- UpdateSOIData(soiData, upToDate = Sys.Date(), 
-                         server = serverIP, username = user, password = password)
-save(soiData, file = "1_Input/RData/soiData.RData")
-
-packageData <- UpdatePackageData(packageData, upToDate = Sys.Date(), 
+flog.info("Update SOI Data", name = reportName)
+soiData <- UpdateSOIData(dateBegin = NULL, extractLength = 10,
+                         server = serverIP,
+                         username = user, password = password)
+flog.info("Update Pacakge Data", name = reportName)
+packageData <- UpdatePackageData(dateBegin = NULL, extractLength = 10,
                                  server = serverIP, username = user, password = password)
-save(packageData, file = "1_Input/RData/packageData.RData")
-
-soiHistoryData <- UpdateSOIHistoryData(soiHistoryData, upToDate = "2015-12-01", 
+flog.info("Update History Data", name = reportName)
+soiHistoryData <- UpdateSOIHistoryData(dateBegin = NULL, extractLength = 10,
                                        server = serverIP, username = user, password = password)
-save(soiHistoryData, file = "1_Input/RData/soiHistoryData.RData")
 
-soiTimestampData <- UpdateSOITimeStamp(soiHistoryData)
-
-soiBasedData <- UpdateSOIBaseData(soiData, packageData, soiTimestampData)
-
-packageBaseData <- BuildPackageData(soiBasedData)
-save(packageData, file = "1_Input/RData/packageBaseData.RData")
+# loginfo("Consolidate OMS Data", logger = consoleLog)
+# soiTimestampData <- UpdateSOITimeStamp(soiHistoryData)
+# soiBasedData <- UpdateSOIBaseData(soiData, packageData, soiTimestampData)
+# packageBaseData <- BuildPackageData(soiBasedData)
+# save(packageBaseData, file = "1_Input/RData/packageBaseData.RData",
+#      compress = TRUE)
+flog.info("Done", name = reportName)

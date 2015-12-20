@@ -1,60 +1,70 @@
-UpdateSOIHistoryData <- function(currentData, upToDate = Sys.Date(), 
-                              server, username, password) {
+UpdateSOIHistoryData <- function(dateBegin = NULL, extractLength = 10,
+                                 server, username, password) {
   suppressMessages({
     require(dplyr)
     require(tools)
     require(magrittr)
     require(methods)
-    require(logging)
+    require(futile.logger)
   })
   
   functionName <- "UpdateSOIHistoryData"
-  loginfo(paste("Function", functionName, "started"), logger = reportName)
+  flog.info(paste("Function", functionName, "started"), name = reportName)
   
   output <- tryCatch({
     
     source("3_Script/1_Code/01_Loading/ExtractSOIHistory.R")
     
-    hasHistoryData = TRUE
-    upToDate <- as.Date(upToDate, format("%Y-%m-%d"))
-    
-    if (is.null(currentData)) {
-      hasHistoryData = FALSE
-      curentLastDate = upToDate - 40
+    if (file.exists("1_Input/RData/soiHistoryData.RData")) {
+      load("1_Input/RData/soiHistoryData.RData")
     } else {
-      curentLastDate <- max(currentData$created_at,
-                            na.rm = TRUE)
+      soiHistoryData <- NULL
     }
     
-    newHistoryData <- ExtractSOIHistory(server = serverIP, username = user, 
-                                         password = password,
-                                         dateBegin = curentLastDate, dateEnd = upToDate,
-                                         batchSize = 25000)
-    
-    newHistoryData %<>%
-      mutate(created_at = as.POSIXct(created_at, "%Y-m-%d %H:%M:%S"))
-    
-    if (hasHistoryData) {
-      newID <- newHistoryData$id_sales_order_item_status_history
-      currentData %<>%
-        filter(!(id_sales_order_item_status_history %in% newID))
-      
-      historyData <- rbind(currentData, newHistoryData)
-      
-    } else {
-      historyData <- newHistoryData
+    if (is.null(dateBegin)) {
+      if (is.null(soiHistoryData)) {
+        dateBegin <- Sys.Date() - 190
+      } else {
+        soiHistoryData %<>%
+          mutate(created_at = as.POSIXct(created_at, "%Y-m-%d %H:%M:%S"))
+        
+        dateBegin <- max(soiHistoryData$created_at)
+      }
     }
     
-    for (iWarn in warnings()){
-      logwarn(paste(functionName, iWarn), logger = reportName)
-    }
+    dateBegin <- as.Date(dateBegin, format = "%Y-%m-%d")
+    dateEnd <- min(dateBegin + extractLength, Sys.Date())
     
-    historyData
+    flog.info(paste("Function", functionName, "Update Data Up to", dateEnd), name = reportName)
+    soiHistoryData <- ExtractSOIHistory(soiHistoryData,
+                                        server = serverIP, username = user, 
+                                        password = password,
+                                        dateBegin = dateBegin, dateEnd = dateEnd,
+                                        batchSize = 200000)
+    
+    soiHistoryData %<>%
+      mutate(created_at = as.POSIXct(created_at, "%Y-m-%d %H:%M:%S"),
+             updated_at = as.POSIXct(updated_at, "%Y-m-%d %H:%M:%S"))
+    
+    soiHistoryData %<>%
+      arrange(desc(created_at)) %>%
+      filter(!duplicated(id_sales_order_item_status_history))
+    
+    latestUpdatedTime <- as.Date(max(soiHistoryData$created_at))
+    soiHistoryData %<>%
+      filter(created_at >= as.POSIXct(latestUpdatedTime - 190))
+    
+    save(soiHistoryData, file = "1_Input/RData/soiHistoryData.RData",
+         compress = TRUE)
+    
+    soiHistoryData
     
   }, error = function(err) {
-    logerror(paste(functionName, err, sep = " - "), logger = consoleLog)
+    flog.error(paste(functionName, err, sep = " - "), name = reportName)
+    
+    NULL 
   }, finally = {
-    loginfo(paste(functionName, "ended"), logger = reportName)
+    flog.info(paste(functionName, "ended"), name = reportName)
   })
   
   output
